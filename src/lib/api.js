@@ -101,10 +101,11 @@ export async function createRoom({ gameId, teacherName, levelLimit }) {
 export async function getRoomByCode(code) {
   const client = requireSupabase();
   const safeCode = normalizeRoomCode(code);
+  const compactCode = safeCode.replace(/-/g, '');
   const { data, error } = await client
     .from('rooms')
     .select('*, game:games(*, course:courses(title, slug, emoji))')
-    .eq('code', safeCode)
+    .in('code', Array.from(new Set([safeCode, compactCode])))
     .limit(1);
   if (error) throw error;
   const room = data?.[0];

@@ -12,7 +12,9 @@ export function clamp(value, min, max) {
 }
 
 export function normalizeRoomCode(code) {
-  return String(code || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+  const compact = String(code || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 7);
+  if (compact.length <= 4) return compact;
+  return `${compact.slice(0, 4)}-${compact.slice(4)}`;
 }
 
 export function makeRoomCode() {
