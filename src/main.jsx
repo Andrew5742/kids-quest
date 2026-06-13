@@ -276,7 +276,7 @@ function StudentView({ session, onExit, onError, sound, notify }) {
 
 function GameTask({ level, disabled, completed, onComplete, sound }) {
   const config = level.config_json || {};
-  const mode = config.mode || level.type;
+  const mode = inferLevelMode(level, config);
   const taskProps = { level, config, disabled, completed, onComplete, sound };
   return (
     <section className={`gameTask mode-${mode || 'default'}`}>
@@ -302,11 +302,26 @@ function GameTask({ level, disabled, completed, onComplete, sound }) {
   );
 }
 
+function inferLevelMode(level, config) {
+  if (config.mode) return config.mode;
+  if (config.target) return 'typingGame';
+  if (config.chips || config.parts) return 'passwordBuilder';
+  if (config.samples || config.labels) return 'aiTrainerGame';
+  if (config.files || config.folders || config.categories) return 'desktopDrag';
+  if (config.results || config.url || config.query) return 'browserHunt';
+  if (config.subject || config.from || config.attachment) return 'emailAction';
+  if (config.messages || config.chatTitle) return 'chatAction';
+  if (config.targetBlocks || config.palette) return 'scratchBlocks';
+  if ((config.items || []).some((item) => item.type === 'hardware' || item.type === 'software')) return 'hardwareSort';
+  if (config.required || config.items) return 'scratchScene';
+  return level.type;
+}
+
 function RobotRouteTask({ level, config, disabled, completed, onComplete, sound }) {
   const grid = config.grid || {};
   const rows = Number(grid.rows || 5); const cols = Number(grid.cols || 6);
   const [commands, setCommands] = useState([]); const [result, setResult] = useState(null);
-  const maxCommands = Number(config.maxCommands || 12);
+  const maxCommands = Math.max(Number(config.maxCommands || 12), 36);
   const palette = config.commands || [{ id: 'forward', emoji: '⬆️', title: 'вперед' }, { id: 'left', emoji: '↩️', title: 'ліворуч' }, { id: 'right', emoji: '↪️', title: 'праворуч' }, { id: 'pickup', emoji: '🦾', title: 'взяти' }, { id: 'repair', emoji: '🔧', title: 'ремонт' }];
   const final = (result?.steps || [{ pos: grid.start || [0, 0], dir: grid.dir || 'E' }]).at(-1);
   const currentPos = final?.pos || grid.start || [0, 0];
@@ -389,7 +404,7 @@ function getStudentHint(mode, config) {
 }
 
 function PasswordBuilderTask({ level, config, disabled, completed, onComplete, sound }) {
-  const [parts, setParts] = useState([]); const pool = config.parts || ['Robot', '42', '!', 'cat', '123', 'name'];
+  const [parts, setParts] = useState([]); const pool = config.parts || (config.chips || []).map((chip) => chip.text) || ['Robot', '42', '!', 'cat', '123', 'name'];
   const password = parts.join(''); const checks = [(password.length >= Number(config.minLength || 8)), /[A-ZА-Я]/.test(password), /\d/.test(password), /[^A-Za-zА-Яа-я0-9]/.test(password)]; const ok = checks.filter(Boolean).length >= Number(config.need || 3) && !(config.banned || []).some((b) => password.toLowerCase().includes(String(b).toLowerCase()));
   return <div className="passwordGame"><div className="passwordScreen"><span>🔐</span><strong>{password || 'Збери пароль'}</strong></div><div className="partsGrid small">{pool.map((p) => <button key={p} onClick={() => { setParts((prev) => [...prev, p]); sound('click'); }} disabled={disabled || completed}>{p}</button>)}</div><div className="checkList"><span className={checks[0] ? 'okText' : ''}>8+ символів</span><span className={checks[1] ? 'okText' : ''}>велика літера</span><span className={checks[2] ? 'okText' : ''}>цифра</span><span className={checks[3] ? 'okText' : ''}>символ</span></div><button className="secondaryBtn" onClick={() => setParts([])} disabled={disabled || completed}>Очистити</button><button className="primaryBtn big" disabled={!ok || disabled || completed} onClick={() => onComplete(level, config.points || 12)}><CheckCircle2 size={20} /> Пароль сильний</button></div>;
 }
