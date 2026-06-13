@@ -117,6 +117,35 @@ grant usage on schema public to anon, authenticated;
 grant select, insert, update, delete on all tables in schema public to anon, authenticated;
 grant usage, select on all sequences in schema public to anon, authenticated;
 
+-- Reset older demo seeds for these games. Some previous versions used different
+-- IDs for the same three slugs, so slug-only upserts can hit games_pkey.
+delete from public.game_levels
+where game_id in (
+  '10000000-0000-4000-8000-000000000001',
+  '20000000-0000-4000-8000-000000000002',
+  '30000000-0000-4000-8000-000000000003',
+  '20000000-0000-4000-8000-000000000001',
+  '20000000-0000-4000-8000-000000000003'
+);
+
+delete from public.games
+where id in (
+  '10000000-0000-4000-8000-000000000001',
+  '20000000-0000-4000-8000-000000000002',
+  '30000000-0000-4000-8000-000000000003',
+  '20000000-0000-4000-8000-000000000001',
+  '20000000-0000-4000-8000-000000000003'
+)
+or slug in ('robocity-rescue', 'digital-city-ai', 'scratch-arcade');
+
+delete from public.courses
+where id in (
+  '00000000-0000-4000-8000-000000000001',
+  '00000000-0000-4000-8000-000000000002',
+  '00000000-0000-4000-8000-000000000003'
+)
+or slug in ('robotics', 'digital-ai', 'scratch');
+
 insert into public.courses (id, title, slug, emoji) values
 ('00000000-0000-4000-8000-000000000001', 'Робототехніка WeDo 2.0 / Spike Prime', 'robotics', '🤖'),
 ('00000000-0000-4000-8000-000000000002', 'Комп’ютерна грамотність та ШІ', 'digital-ai', '🧠'),
@@ -128,8 +157,6 @@ insert into public.games (id, course_id, title, slug, age_min, age_max, duration
 ('20000000-0000-4000-8000-000000000002', '00000000-0000-4000-8000-000000000002', 'Digital City: комп’ютерна грамотність та ШІ', 'digital-city-ai', 6, 9, 90, 'Робочий стіл, браузер, пошта, чат, паролі, файли, міні-тести й тренування маленького ШІ.', '🛡️', true),
 ('30000000-0000-4000-8000-000000000003', '00000000-0000-4000-8000-000000000003', 'Scratch Arcade: гра, блоки й квест котика', 'scratch-arcade', 6, 9, 90, 'Міні-сцени, Scratch-блоки, порядок команд, персонажі, бонуси, вороги, тести й фінальна презентація.', '🐱', true)
 on conflict (slug) do update set title = excluded.title, description = excluded.description, cover_emoji = excluded.cover_emoji, duration_minutes = excluded.duration_minutes, is_active = true;
-
-delete from public.game_levels where game_id in ('10000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000002', '30000000-0000-4000-8000-000000000003');
 
 insert into public.game_levels (game_id, order_index, title, type, time_minutes, teacher_hint, config_json) values
 ('10000000-0000-4000-8000-000000000001', 1, 'Пробудження ровера · місія 1', 'game', 7, 'Після симуляції перенести маршрут на підлогу/стіл і запустити реального робота.', '{"mode": "robotRoute", "hero": "🤖", "instruction": "Склади маршрут робота: рух, повороти, захват і ремонт. Запусти симуляцію.", "robotIcon": "🤖", "robotName": "Robo-WeDo / Spike", "kit": "WeDo 2.0 + Spike Prime", "storyTitle": "Пробудження ровера", "story": "У RoboCity сталася поломка. Робот має пройти поле, виконати дію й доїхати до прапорця.", "objectives": ["обійти перешкоди", "виконати дію", "фініш на прапорці"], "grid": {"rows": 5, "cols": 6, "start": [4, 0], "dir": "E", "goal": [0, 5], "obstacles": [[3, 1], [3, 2], [2, 2], [1, 3]], "items": [{"id": "battery", "pos": [4, 3], "emoji": "🔋"}], "repairs": [{"id": "antenna", "pos": [0, 4], "emoji": "📡"}]}, "commands": [{"id": "forward", "emoji": "⬆️", "title": "вперед"}, {"id": "left", "emoji": "↩️", "title": "ліворуч"}, {"id": "right", "emoji": "↪️", "title": "праворуч"}, {"id": "pickup", "emoji": "🦾", "title": "взяти"}, {"id": "repair", "emoji": "🔧", "title": "ремонт"}], "maxCommands": 19, "points": 15}'::jsonb),
