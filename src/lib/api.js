@@ -1,5 +1,6 @@
 import { fallbackGames } from './fallbackGames';
 import { DEFAULT_TEAMS, makeRoomCode, normalizeRoomCode } from './helpers';
+import { enhanceLevels } from './levelVariants';
 import { isSupabaseConfigured, requireSupabase, supabase } from './supabase';
 
 export async function fetchGames() {
@@ -30,7 +31,7 @@ export async function fetchLevels(gameId) {
     .eq('game_id', gameId)
     .order('order_index', { ascending: true });
   if (error) throw error;
-  return data || [];
+  return enhanceLevels(data || []);
 }
 
 function isSingleResultError(error) {
@@ -168,7 +169,7 @@ export async function getRoomBundle(roomId) {
   ]);
   for (const res of [levelsRes, playersRes, teamsRes, eventsRes]) if (res.error) throw res.error;
 
-  const allLevels = levelsRes.data || [];
+  const allLevels = enhanceLevels(levelsRes.data || []);
   const limit = Number(safeRoom.level_limit || allLevels.length || 0);
   return {
     room: safeRoom,

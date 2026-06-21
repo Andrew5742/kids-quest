@@ -14,6 +14,8 @@ export function AITrainerGameTask({ level, config, disabled, completed, onComple
   const [correct, setCorrect] = useState(0);
   const [combo, setCombo] = useState(0);
   const [done, setDone] = useState(false);
+  const minCorrect = Number(config.minCorrect || cards.length);
+  const passed = done && correct >= minCorrect;
   const controls = useAnimation();
   const { isShaking, shake, shakeAnimation } = useShake();
 
@@ -21,7 +23,9 @@ export function AITrainerGameTask({ level, config, disabled, completed, onComple
     if (disabled || completed || done) return;
     const card = cards[currentIdx];
     const threshold = 100;
-    if (info.offset.x > threshold) {
+    if (categories.length !== 2) {
+      controls.start({ x: 0, y: 0 });
+    } else if (info.offset.x > threshold) {
       // Swiped Right
       processAnswer(categories[1]?.id);
     } else if (info.offset.x < -threshold) {
@@ -45,9 +49,10 @@ export function AITrainerGameTask({ level, config, disabled, completed, onComple
       sound('fail');
     }
     
+    const nextCorrect = correct + (isCorrect ? 1 : 0);
     if (currentIdx + 1 >= cards.length) {
       setDone(true);
-      if (isCorrect || correct > 0) fireConfetti();
+      if (nextCorrect >= minCorrect) fireConfetti();
     } else {
       setCurrentIdx(i => i + 1);
     }
@@ -55,13 +60,20 @@ export function AITrainerGameTask({ level, config, disabled, completed, onComple
 
   const card = cards[currentIdx];
 
+  function retry() {
+    setCurrentIdx(0);
+    setCorrect(0);
+    setCombo(0);
+    setDone(false);
+  }
+
   return (
     <div className="aiTrainerGame">
       <div className="simHeader">
         <span>🤖</span>
         <div>
           <strong>Швидке навчання ШІ</strong>
-          <small>Свайпай картку вліво або вправо, або натискай кнопки.</small>
+          <small>{categories.length === 2 ? 'Свайпай картку вліво або вправо чи натискай кнопки.' : 'Роздивись приклад і вибери одну з категорій кнопками.'}</small>
         </div>
       </div>
       
@@ -69,19 +81,19 @@ export function AITrainerGameTask({ level, config, disabled, completed, onComple
       
       <div className="swipeArena">
         <div className="swipeZone leftZone">
-          <span>👈</span> {categories[0]?.title}
+          <span>{categories.length === 2 ? '👈' : '🧠'}</span> {categories.length === 2 ? categories[0]?.title : 'Обери категорію'}
         </div>
         
         <div className="cardStack">
           {done ? (
-            <div className="feedback ok">
-              Навчання завершено! Точність: {correct}/{cards.length}
+            <div className={passed ? 'feedback ok' : 'feedback bad'}>
+              {passed ? 'Навчання завершено!' : `Потрібно щонайменше ${minCorrect} правильних відповідей.`} Точність: {correct}/{cards.length}
             </div>
           ) : (
             <AnimatePresence>
               <motion.div
                 key={card?.id || currentIdx}
-                drag="x"
+                drag={categories.length === 2 ? 'x' : false}
                 dragConstraints={{ left: 0, right: 0 }}
                 onDragEnd={handleDragEnd}
                 animate={controls}
@@ -99,18 +111,18 @@ export function AITrainerGameTask({ level, config, disabled, completed, onComple
         </div>
         
         <div className="swipeZone rightZone">
-          {categories[1]?.title} <span>👉</span>
+          {categories.length === 2 ? categories[1]?.title : `${cards.length} прикладів`} <span>{categories.length === 2 ? '👉' : '🎯'}</span>
         </div>
       </div>
 
       {!done && (
         <div className="actionRow centered">
-          <button className="secondaryBtn" onClick={() => processAnswer(categories[0]?.id)}>← {categories[0]?.title}</button>
-          <button className="secondaryBtn" onClick={() => processAnswer(categories[1]?.id)}>{categories[1]?.title} →</button>
+          {categories.map((category) => <button key={category.id} className="secondaryBtn" onClick={() => processAnswer(category.id)} disabled={disabled || completed}>{category.emoji} {category.title}</button>)}
         </div>
       )}
 
-      <button className="primaryBtn big" disabled={!done || disabled || completed} onClick={() => onComplete(level, correct * Number(config.pointsPerCard || 4))}>
+      {done && !passed ? <button className="secondaryBtn" onClick={retry} disabled={disabled || completed}>Спробувати ще раз</button> : null}
+      <button className="primaryBtn big" disabled={!passed || disabled || completed} onClick={() => onComplete(level, correct * Number(config.pointsPerCard || 4))}>
         <CheckCircle2 size={20} /> Готово
       </button>
     </div>
@@ -139,7 +151,7 @@ export function BrowserHuntTask({ level, config, disabled, completed, onComplete
   }, [disabled, completed, feedback, sound]);
 
   function pick(card) {
-    if (disabled || completed || popups.length > 0) {
+    if (disabled || completed || feedback || popups.length > 0) {
       if (popups.length > 0) shake();
       return;
     }
@@ -207,6 +219,7 @@ export function BrowserHuntTask({ level, config, disabled, completed, onComplete
       <button className="primaryBtn big" disabled={!ok || disabled || completed} onClick={() => onComplete(level, config.points || 10)}>
         <CheckCircle2 size={20} /> Завдання виконано
       </button>
+      {feedback && !ok ? <button className="secondaryBtn" onClick={() => { setSelected(null); setFeedback(null); }} disabled={disabled || completed}>Перевірити ще раз</button> : null}
     </motion.div>
   );
 }
@@ -300,7 +313,7 @@ export function ChoiceTask({ level, config, disabled, completed, onComplete, sou
   const { isShaking, shake, shakeAnimation } = useShake();
 
   function pick(card) {
-    if (disabled || completed) return;
+    if (disabled || completed || selected) return;
     setSelected(card.id || card.title);
     const ok = Boolean(card.isCorrect || card.correct);
     setFeedback(ok ? 'Так! Правильна дія.' : 'Не зовсім. Спробуй інший варіант.');
@@ -322,7 +335,7 @@ export function ChoiceTask({ level, config, disabled, completed, onComplete, sou
             key={card.id || card.title} 
             className={`choiceCard ${selected === (card.id || card.title) ? (card.isCorrect || card.correct ? 'correct' : 'wrong') : ''}`} 
             onClick={() => pick(card)} 
-            disabled={disabled || completed}
+            disabled={disabled || completed || Boolean(selected)}
           >
             <span>{card.emoji || '✨'}</span>
             <strong>{card.title}</strong>
@@ -334,6 +347,7 @@ export function ChoiceTask({ level, config, disabled, completed, onComplete, sou
       <button className="primaryBtn big" disabled={!ok || disabled || completed} onClick={() => onComplete(level, config.points || 10)}>
         <CheckCircle2 size={20} /> Відповідь прийнято
       </button>
+      {selected && !ok ? <button className="secondaryBtn" onClick={() => { setSelected(null); setFeedback(null); }} disabled={disabled || completed}>Обдумати й спробувати ще</button> : null}
     </motion.div>
   );
 }
@@ -407,8 +421,10 @@ export function TypingGameTask({ level, config, disabled, completed, onComplete,
 
 export function HardwareSortTask({ level, config, disabled, completed, onComplete, sound }) {
   const items = config.items || []; const [index, setIndex] = useState(0); const [score, setScore] = useState(0); const [done, setDone] = useState(false); const item = items[index];
+  const minCorrect = Number(config.minCorrect || items.length); const passed = done && score >= minCorrect;
   function answer(type) { if (!item || disabled || completed) return; const ok = item.type === type; sound(ok ? 'success' : 'fail'); const nextScore = score + (ok ? 1 : 0); setScore(nextScore); if (index + 1 >= items.length) setDone(true); else setIndex(index + 1); }
-  return <div className="hardwareGame"><div className="hardwareCard"><span>{item?.emoji || '🏁'}</span><strong>{item?.title || 'Фініш'}</strong><small>{done ? `Рахунок: ${score}/${items.length}` : `Картка ${index + 1}/${items.length}`}</small></div><div className="actionRow centered"><button className="secondaryBtn" onClick={() => answer('hardware')} disabled={done || disabled || completed}>🔩 Пристрій</button><button className="secondaryBtn" onClick={() => answer('software')} disabled={done || disabled || completed}>💾 Програма</button></div>{done ? <button className="primaryBtn big" onClick={() => onComplete(level, Math.max(5, score * Number(config.pointsPerItem || 3)))} disabled={disabled || completed}><CheckCircle2 size={20} /> Тест завершено</button> : null}</div>;
+  function retry() { setIndex(0); setScore(0); setDone(false); }
+  return <div className="hardwareGame"><div className="hardwareCard"><span>{item?.emoji || (passed ? '🏆' : '🔁')}</span><strong>{item?.title || (passed ? 'Усе правильно' : 'Є помилки')}</strong><small>{done ? `Рахунок: ${score}/${items.length}` : `Картка ${index + 1}/${items.length}`}</small></div><div className="actionRow centered"><button className="secondaryBtn" onClick={() => answer('hardware')} disabled={done || disabled || completed}>🔩 Пристрій</button><button className="secondaryBtn" onClick={() => answer('software')} disabled={done || disabled || completed}>💾 Програма</button></div>{done && !passed ? <button className="secondaryBtn" onClick={retry} disabled={disabled || completed}>Повторити набір</button> : null}{done ? <button className="primaryBtn big" onClick={() => onComplete(level, score * Number(config.pointsPerItem || 3))} disabled={!passed || disabled || completed}><CheckCircle2 size={20} /> Тест завершено</button> : null}</div>;
 }
 
 export function QuizBattleTask({ level, config, disabled, completed, onComplete, sound }) {
