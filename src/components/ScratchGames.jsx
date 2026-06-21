@@ -114,18 +114,21 @@ export function ScratchSceneTask({ level, config, disabled, completed, onComplet
   ];
   
   const [selected, setSelected] = useState([]);
-  const ok = required.every((id) => selected.includes(id));
+  const ok = required.length === selected.length && required.every((id) => selected.includes(id));
   
   const [isPlaying, setIsPlaying] = useState(false);
+  const [hasPlayed, setHasPlayed] = useState(false);
 
   function toggle(id) {
     if (disabled || completed) return;
+    setHasPlayed(false);
     setSelected((p) => p.includes(id) ? p.filter((x) => x !== id) : [...p, id]);
     sound('click');
   }
   
   function playScene() {
     setIsPlaying(true);
+    setHasPlayed(ok);
     sound(ok ? 'success' : 'fail');
     if (ok) fireConfetti();
     setTimeout(() => setIsPlaying(false), 2000);
@@ -134,7 +137,9 @@ export function ScratchSceneTask({ level, config, disabled, completed, onComplet
   return (
     <div className="scratchSceneGame">
       <div className="taskInstruction" style={{ background: '#fff', padding: '16px', borderRadius: '16px', marginBottom: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
-        <strong>📝 Як пройти:</strong> Знайди всі елементи з позначкою <strong>«потрібно»</strong> та додай їх на сцену. Потім натисни зелену кнопку ▶️ Play на сцені.
+        <strong>📝 Умови сцени:</strong>
+        <ul>{(config.clues || ['Потрібен головний персонаж', 'Потрібна мета гри']).map((clue) => <li key={clue}>{clue}</li>)}</ul>
+        Вибери рівно потрібні об’єкти, а потім перевір сцену кнопкою ▶️ Play.
       </div>
       <div className="scratchStage big">
         <div className="stageBg">
@@ -180,16 +185,16 @@ export function ScratchSceneTask({ level, config, disabled, completed, onComplet
           >
             <span>{i.emoji}</span>
             <strong>{i.title}</strong>
-            <small>{required.includes(i.id) ? 'потрібно' : 'бонус'}</small>
+            <small>об’єкт сцени</small>
           </motion.button>
         ))}
       </div>
       
       <div className={ok ? 'feedback ok' : 'feedback neutral'}>
-        {ok ? 'Сцена готова!' : 'Додай потрібні елементи сцени.'}
+        {hasPlayed ? 'Сцена працює!' : ok ? 'Набір схожий на правильний. Тепер запусти сцену.' : 'Зістав об’єкти з умовами й прибери зайве.'}
       </div>
       
-      <button className="primaryBtn big" disabled={!ok || disabled || completed} onClick={() => onComplete(level, config.points || 12)}>
+      <button className="primaryBtn big" disabled={!ok || !hasPlayed || disabled || completed} onClick={() => onComplete(level, config.points || 12)}>
         <CheckCircle2 size={20} /> Сцену зібрано
       </button>
     </div>

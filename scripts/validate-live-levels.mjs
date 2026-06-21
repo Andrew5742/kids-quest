@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { createClient } from '@supabase/supabase-js';
+import { enhanceLevels } from '../src/lib/levelVariants.js';
 
 function loadLocalEnv() {
   if (!fs.existsSync('.env.local')) return;
@@ -112,6 +113,7 @@ function validateLevel(level) {
     const cards = config.cards || config.files || config.samples || [];
     const categoryIds = new Set(categories.map((item) => item.id));
     assert(cards.length > 0 && cards.every((card) => categoryIds.has(card.category || card.target || card.label)), 'card has no matching category');
+    if (mode === 'aiTrainerGame') assert(Number(config.minCorrect || cards.length) <= cards.length, 'AI pass threshold is impossible');
   }
   if (mode === 'browserHunt') {
     const cards = config.results || config.options || [];
@@ -120,7 +122,11 @@ function validateLevel(level) {
   if (mode === 'emailAction' || mode === 'chatAction') assert(hasCorrectChoice(config.cards || config.options), 'no correct choice');
   if (mode === 'passwordBuilder') assert(passwordIsSolvable(config), 'password requirements cannot be met');
   if (mode === 'typingGame' || mode === 'keyboardTrainer') assert(String(config.target || '').length > 0, 'missing typing target');
-  if (mode === 'hardwareSort') assert((config.items || []).every((item) => ['hardware', 'software'].includes(item.type)), 'invalid hardware category');
+  if (mode === 'hardwareSort') {
+    const items = config.items || [];
+    assert(items.length > 0 && items.every((item) => ['hardware', 'software'].includes(item.type)), 'invalid hardware category');
+    assert(Number(config.minCorrect || items.length) <= items.length, 'hardware pass threshold is impossible');
+  }
   if (mode === 'quizBattle') {
     const questions = config.questions || [];
     assert(questions.length > 0 && questions.every((question) => hasCorrectChoice(question.options)), 'quiz question has no correct answer');
@@ -145,13 +151,41 @@ const [gamesResult, levelsResult] = await Promise.all([
 if (gamesResult.error) throw gamesResult.error;
 if (levelsResult.error) throw levelsResult.error;
 
+function playSignature(level) {
+  const config = level.config_json || {};
+  const mode = config.mode || level.type;
+  const fields = {
+    robotRoute: ['grid'],
+    robotAssembly: ['requiredParts', 'requiredProgram'],
+    desktopDrag: ['categories', 'cards'],
+    browserHunt: ['query', 'results'],
+    emailAction: ['from', 'subject', 'message', 'attachment', 'cards'],
+    chatAction: ['messages', 'cards'],
+    aiTrainerGame: ['categories', 'cards'],
+    passwordBuilder: ['parts', 'banned', 'minLength', 'need'],
+    typingGame: ['target'],
+    keyboardTrainer: ['target'],
+    hardwareSort: ['items'],
+    quizBattle: ['questions'],
+    scratchBlocks: ['palette', 'targetBlocks'],
+    scratchScene: ['items', 'required'],
+  }[mode] || [];
+  return JSON.stringify(Object.fromEntries(fields.map((field) => [field, config[field]])));
+}
+
 const games = gamesResult.data || [];
-const levels = levelsResult.data || [];
+const levels = enhanceLevels(levelsResult.data || []);
 const modes = {};
+const signatures = new Map();
 for (const level of levels) {
   try {
     const mode = validateLevel(level);
     modes[mode] = (modes[mode] || 0) + 1;
+    const group = `${level.game_id}|${mode}`;
+    if (!signatures.has(group)) signatures.set(group, new Set());
+    const signature = playSignature(level);
+    assert(!signatures.get(group).has(signature), 'duplicate playable configuration');
+    signatures.get(group).add(signature);
   } catch (error) {
     throw new Error(`Level ${level.game_id}/${level.order_index} (${level.title}): ${error.message}`);
   }
@@ -160,4 +194,5 @@ for (const level of levels) {
 assert.equal(games.length, 3, 'expected 3 games');
 assert.equal(levels.length, 135, 'expected 135 levels');
 assert(games.every((game) => levels.filter((level) => level.game_id === game.id).length === 45), 'every game must have 45 levels');
+assert.equal(new Set(levels.map((level) => `${level.game_id}|${level.title}`)).size, levels.length, 'level titles must be unique inside each game');
 console.log(JSON.stringify({ ok: true, games: games.length, levels: levels.length, modes }, null, 2));
